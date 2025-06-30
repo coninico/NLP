@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FitBuddy Chatbot</title>
+    <!-- Link to the external CSS file -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="chat-container">
+        <h1>Welcome, {{ profile.name }}!</h1>
+        <form action="/ask" method="POST">
+            <label for="user_input">Ask me anything about fitness:</label>
+            <input type="text" id="user_input" name="user_input" required>
+            <input type="submit" value="Ask">
+        </form>
+
+        {% if history %}
+        <div class="response-container">
+            <h3>Chat History:</h3>
+            <div>
+                {% for entry in history|reverse %}
+                    <p><strong>You:</strong> {{ entry.user }}</p>
+                    <p><strong>FitBuddy:</strong> {{ entry.bot | safe | replace('\n', '<br>') }}</p>
+                    <hr/>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="footer-links">
+            <a href="{{ url_for('logout') }}">Start Over / Logout</a>
+        </div>
+    </div>
+</body>
+</html>

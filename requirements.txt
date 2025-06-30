@@ -1,0 +1,4 @@
+flask
+spacy
+transformers
+Flask-SQLAlchemy
