@@ -22,7 +22,7 @@
             <div>
                 {% for entry in history|reverse %}
                     <p><strong>You:</strong> {{ entry.user }}</p>
-                    <p><strong>FitBuddy:</strong> {{ entry.bot | safe | replace('\n', '<br>') }}</p>
+                    <p><strong>FitBuddy:</strong> {{ entry.bot|safe }}</p>
                     <hr/>
                 {% endfor %}
             </div>

@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from transformers import pipeline
 import spacy
 import os
+from datetime import datetime
 
 # Initialize the app
 app = Flask(__name__)
@@ -19,6 +20,7 @@ class User(db.Model):
     gender = db.Column(db.String(20), nullable=False)
     fitness_level = db.Column(db.String(50), nullable=False)
     goal = db.Column(db.String(50), nullable=False)
+    workouts = db.relationship('WorkoutLog', backref='user', lazy=True)
 
     def to_dict(self):
         return {
@@ -28,6 +30,12 @@ class User(db.Model):
             'fitness_level': self.fitness_level,
             'goal': self.goal
         }
+
+class WorkoutLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    activity = db.Column(db.String(200), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 # Load the Hugging Face model for intent recognition
 try:
@@ -45,7 +53,7 @@ except OSError:
     nlp = spacy.load("en_core_web_sm")
 
 # List of possible intents related to fitness
-intents = ['weight_loss', 'muscle_gain', 'workout_schedule', 'nutrition', 'fitness_goals', 'request_plan', 'request_meal_plan']
+intents = ['weight_loss', 'muscle_gain', 'workout_schedule', 'nutrition', 'fitness_goals', 'request_plan', 'request_meal_plan', 'log_workout', 'view_progress']
 
 # Define functions for intent recognition and NER
 def recognize_intent(user_input):
@@ -132,10 +140,23 @@ def generate_response(intent, entities, profile=None):
         response = generate_workout_plan(profile)
     elif intent == 'request_meal_plan':
         response = generate_meal_plan(profile)
+    elif intent == 'log_workout':
+        session['next_message_is_log'] = True
+        session.modified = True
+        response = "Great job on the workout! What activity did you complete? I'll log it for you."
+    elif intent == 'view_progress':
+        user_id = session.get('user_id')
+        logs = WorkoutLog.query.filter_by(user_id=user_id).order_by(WorkoutLog.date.desc()).all()
+        if not logs:
+            response = "You haven't logged any workouts yet. Ask me to 'log a workout' to get started!"
+        else:
+            response = "Here is your workout history:\n\n"
+            for log in logs:
+                response += f"- **{log.date.strftime('%Y-%m-%d')}:** {log.activity}\n"
     else:
         response = f"Hi {name}, I'm not sure I understand. You can ask me to 'create a workout plan' or 'suggest a meal plan'."
     
-    if entities and intent not in ['request_plan', 'request_meal_plan']:
+    if entities and intent not in ['request_plan', 'request_meal_plan', 'view_progress']:
         response += " I see you mentioned " + ', '.join([ent[0] for ent in entities]) + ". I can help with that!"
     
     return response
@@ -195,6 +216,23 @@ def ask():
     if not user:
         session.pop('user_id', None)
         return redirect(url_for('home'))
+
+    # Handle workout logging if the flag is set
+    if session.get('next_message_is_log'):
+        # Log the workout
+        new_log = WorkoutLog(activity=user_input, user_id=user.id)
+        db.session.add(new_log)
+        db.session.commit()
+        
+        # Unset the flag and prepare response
+        session['next_message_is_log'] = False
+        session.modified = True
+        response = f"Awesome! I've logged '{user_input}' for you. Keep up the great work!"
+
+        # Add to history and return
+        session['history'].append({'user': user_input, 'bot': response})
+        session.modified = True
+        return render_template('index.html', history=session['history'], profile=user.to_dict())
 
     # Ensure history is in session
     if 'history' not in session:
